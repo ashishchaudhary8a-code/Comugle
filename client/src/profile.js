@@ -147,6 +147,53 @@ const COUNTRIES = [
   "Pakistan", "Sri Lanka", "Nepal", "Other"
 ];
 
+// ===== CUSTOM SELECT COMPONENT =====
+function CustomSelect({ id, placeholder, value, options, onChange, name }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div className="custom-select-container" ref={containerRef} id={id}>
+      <button
+        type="button"
+        className={`custom-select-trigger ${value ? "has-value" : ""}`}
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span>{value || placeholder}</span>
+        <span className="custom-select-arrow" style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0)", display: "inline-block" }}>▼</span>
+      </button>
+
+      {isOpen && (
+        <div className="custom-select-options">
+          {options.map((option) => (
+            <button
+              key={option}
+              type="button"
+              className={`custom-select-option ${value === option ? "selected" : ""}`}
+              onClick={() => {
+                onChange({ target: { name, value: option } });
+                setIsOpen(false);
+              }}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Profile() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
@@ -409,34 +456,26 @@ export default function Profile() {
           <div className="form-row">
             <div className="input-group">
               <label className="input-label">Country *</label>
-              <select
+              <CustomSelect
                 id="country-select"
-                className="select"
+                placeholder="Select Country"
                 name="country"
                 value={form.country}
+                options={COUNTRIES}
                 onChange={handleChange}
-              >
-                <option value="">Select Country</option>
-                {COUNTRIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+              />
             </div>
 
             <div className="input-group">
               <label className="input-label">Year *</label>
-              <select
+              <CustomSelect
                 id="year-select"
-                className="select"
+                placeholder="Select Year"
                 name="year"
                 value={form.year}
+                options={YEAR_OPTIONS}
                 onChange={handleChange}
-              >
-                <option value="">Select Year</option>
-                {YEAR_OPTIONS.map((y) => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
+              />
             </div>
           </div>
 
@@ -469,18 +508,14 @@ export default function Profile() {
               <label className="input-label">
                 Stream / Branch * {COURSE_DATA[form.course]?.icon}
               </label>
-              <select
+              <CustomSelect
                 id="stream-select"
-                className="select"
+                placeholder="Select your stream"
                 name="stream"
                 value={form.stream}
+                options={availableStreams}
                 onChange={handleChange}
-              >
-                <option value="">Select your stream</option>
-                {availableStreams.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
+              />
             </div>
           )}
 

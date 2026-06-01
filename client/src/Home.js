@@ -194,6 +194,11 @@ export default function Home() {
     }
 
     setUser(stored);
+
+    // 🔐 FIX: Provide the token to the handshake options before connecting
+    // Looks inside the user object first, falls back to standalone token if needed
+    socket.auth = { token: stored.token || localStorage.getItem("comugle_token") };
+
     socket.connect();
     
     // We emit `user-online` to be counted in live stats
@@ -453,7 +458,9 @@ export default function Home() {
     setIsVideoOn(true);
     setStatus("waiting");
     setChat([{ sender: "system", text: `Looking for someone (${getFilterLabel()})...` }]);
-    socket.emit("find-match", { email: user.email, filter: getFilterString() });
+    
+    // 🔐 FIX: Removed email payload to eliminate client-side identity spoofing
+    socket.emit("find-match", { filter: getFilterString() });
   };
 
   const stopChat = () => {
@@ -702,7 +709,7 @@ export default function Home() {
           ) : (
             <>
               <div className="video-area">
-                {/* Remote video (stranger) — fullscreen */}
+                /* Remote video (stranger) — fullscreen */
                 <div className="video-remote">
                   <video ref={remoteVideo} autoPlay playsInline />
                   {status === "connected" ? (
@@ -736,7 +743,7 @@ export default function Home() {
                   )}
                 </div>
 
-                {/* Local video (you) — small PiP bottom-right */}
+                /* Local video (you) — small PiP bottom-right */
                 <div className="video-pip">
                   <video ref={localVideo} autoPlay muted playsInline style={{ display: isVideoOn ? "block" : "none" }} />
                   {!isVideoOn && (
@@ -752,7 +759,7 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Control bar */}
+              /* Control bar */
               <div className="control-bar">
                 <div className="control-group">
                   <button
@@ -818,7 +825,7 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Filter panel popup */}
+              /* Filter panel popup */
               {showFilterPanel && (
                 <div className="filter-panel-overlay">
                   <FilterPanel
@@ -831,7 +838,7 @@ export default function Home() {
           )}
         </div>
 
-        {/* Chat section */}
+        /* Chat section */
         {status !== "idle" && (
           <div className="chat-section">
           <div className="chat-header">
@@ -880,7 +887,7 @@ export default function Home() {
             <button
               className="send-btn"
               onClick={sendMessage}
-              disabled={status !== "connected" || !input.trim()}
+              disabled={status !== "connected"}
             >
               ➤
             </button>
@@ -889,7 +896,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* Toast */}
+      /* Toast */
       {toast && (
         <div className={`toast ${toast.type}`}>
           {toast.message}

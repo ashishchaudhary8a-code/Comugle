@@ -4,18 +4,54 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 const nodemailer = require("nodemailer");
 const mongoose = require("mongoose");
+const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
 const User = require("./models/User");
 
 const app = express();
 const server = http.createServer(app);
+const allowedOrigins = [
+  "http://localhost:3000",
+  // the website on which its gonna be deployed on "https://your-app-name.netlify.app"
+];
+const corsOptions = {
+  origin : function(origin, callback){
+    if(!origin || allowedOrigins.includes(origin)){
+      callback(null, true);
+    } else{
+      callback(new Error("Blocked by Cors policy: Unothorized origin.\nDon't try to be over smart"));
+    }
+  },
+  credentials: true
+};
+app.use(cors(corsOptions));
 const io = new Server(server, {
-  cors: { origin: "*" },
+  cors:{
+    origin: allowedOrigins,
+    methods: ["GET", "POST"]
+  }
 });
 
-app.use(cors());
 app.use(express.json({ limit: "5mb" }));
+
+// ===== API Rate Limit ======
+const rateLimit = require("express-rate-limit");
+const otpLimiter = rateLimit({
+  windowMs: 15 * 60* 1000 ,        //15 min
+  max: 5,
+  message: {success: false, message: "Too many OTP attempts. Please try again after 15 minutes."}  ,
+  standardHeaders : true,
+  legacyHeaders: false
+})
+
+const reportLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { success: false, message: "Too many reports submitted. Please slow down." },
+  standardHeaders: true,
+  legacyHeaders: false
+})
 
 // ===== CONNECT MONGODB =====
 mongoose
@@ -79,7 +115,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // ===== SEND OTP =====
-app.post("/send-otp", async (req, res) => {
+app.post("/send-otp", otpLimiter, async (req, res) => {
   const { email } = req.body;
 
   if (!isUniversityEmail(email)) {
@@ -99,12 +135,22 @@ app.post("/send-otp", async (req, res) => {
     });
   }
 
-  const otp = Math.floor(100000 + Math.random() * 900000);
-  otpStore[email] = otp;
+  const crypto = require("crypto");
+  const otp = crypto.randomInt(100000, 999999);
+  otpStore[email] = {
+    otp,
+    expiresAt: Date.now() + 60000 // 1 minute expiry
+  };
+  setTimeout(() => {
+    if (otpStore[email]) {
+      delete otpStore[email];
+      console.log(`🧹 Memory Cleaned: Expired OTP removed for ${email}`)
+    }
+  }, 60000);
 
   try {
     await transporter.sendMail({
-      from: "ashishchaudhary8a@gmail.com",
+      from: process.env.EMAIL_USER,
       to: email,
       subject: "Comugle - Your Verification Code",
       html: `
@@ -114,7 +160,7 @@ app.post("/send-otp", async (req, res) => {
           <div style="background: linear-gradient(135deg, #8b5cf6, #06b6d4); padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 24px;">
             <span style="color: white; font-size: 32px; font-weight: 800; letter-spacing: 8px;">${otp}</span>
           </div>
-          <p style="color: #94a3b8; font-size: 13px;">This code expires in 10 minutes. Don't share it with anyone.</p>
+          <p style="color: #94a3b8; font-size: 13px;">This code expires in 1 minute. Don't share it with anyone.</p>
         </div>
       `,
     });
@@ -129,8 +175,16 @@ app.post("/send-otp", async (req, res) => {
 // ===== VERIFY OTP =====
 app.post("/verify-otp", async (req, res) => {
   const { email, otp } = req.body;
+  const stored = otpStore[email];
 
-  if (otpStore[email] == otp) {
+  const parsedClientOtp = parseInt(otp, 10);
+
+  if (stored && stored.otp === parsedClientOtp) {
+    if (Date.now() > stored.expiresAt) {
+      delete otpStore[email];
+      return res.json({ success: false, message: "OTP has expired. Please request a new one." });
+    }
+
     delete otpStore[email];
 
     // Find or create user in MongoDB
@@ -148,20 +202,45 @@ app.post("/verify-otp", async (req, res) => {
       });
     }
 
-    res.json({ success: true, user: user.toObject() });
+    const token = jwt.sign({ email: user.email }, process.env.JWT_SECRET, { expiresIn: "7d" });
+
+    res.json({ success: true, token, user: user.toObject() });
   } else {
-    res.json({ success: false });
+    res.json({ success: false, message: "Invalid OTP. Please try again." });
   }
 });
 
 // ===== SAVE PROFILE =====
 app.post("/save-profile", async (req, res) => {
-  const { email, ...data } = req.body;
+  const { email } = req.body;
+
+  if (!email) {
+    return res.json({ success: false, message: "Email is required" });
+  }
+
+  // Strict whitelist of fields that the user is allowed to update
+  const allowedFields = [
+    "username",
+    "avatar",
+    "photo",
+    "college",
+    "country",
+    "year",
+    "course",
+    "stream"
+  ];
+
+  const updateData = {};
+  for (const field of allowedFields) {
+    if (req.body[field] !== undefined) {
+      updateData[field] = req.body[field];
+    }
+  }
 
   try {
     const user = await User.findOneAndUpdate(
       { email },
-      { $set: data },
+      { $set: updateData },
       { new: true, upsert: true }
     );
 
@@ -173,7 +252,7 @@ app.post("/save-profile", async (req, res) => {
 });
 
 // ===== REPORT USER =====
-app.post("/report-user", async (req, res) => {
+app.post("/report-user", reportLimiter, async (req, res) => {
   const { reporterEmail, reportedEmail } = req.body;
 
   if (!reporterEmail || !reportedEmail) {
@@ -265,6 +344,24 @@ app.post("/report-user", async (req, res) => {
 });
 
 // ===== SOCKET.IO =====
+// 🔐 SECURE MIDDLEWARE: Verifies token before allowing connection
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+
+  if (!token) {
+    return next(new Error("Authentication error: Token missing"));
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    socket.email = decoded.email; 
+
+    next(); // Authenticated successfully, proceed to connection
+  } catch (err) {
+    return next(new Error("Authentication error: Invalid token"));
+  }
+});
+
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
@@ -276,12 +373,20 @@ io.on("connection", (socket) => {
   });
 
   // ===== FIND MATCH =====
-  socket.on("find-match", async ({ email, filter }) => {
-    socket.email = email;
+  // ===== FIND MATCH =====
+  // 🔐 We removed 'email' from the brackets here so we don't trust the client
+  socket.on("find-match", async ({ filter }) => { 
+    
+    // 🔐 We DELETED "socket.email = email;" because the middleware already set it!
     socket.filter = filter;
 
+    // Now, whenever you need the user's email in the rest of this function, 
+    // you can safely use: socket.email
+
+    // ... the rest of your matchmaking code goes here ...
+
     // Check if user is blocked before allowing match
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: socket.email });
     if (user && user.isBlocked()) {
       socket.emit("account-blocked", {
         message: "Your account is blocked due to excessive reports.",
