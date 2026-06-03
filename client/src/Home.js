@@ -759,7 +759,7 @@ export default function Home() {
                 </div>
               </div>
 
-              /* Control bar */
+              {/* Control bar */}
               <div className="control-bar">
                 <div className="control-group">
                   <button
@@ -825,7 +825,7 @@ export default function Home() {
                 </div>
               </div>
 
-              /* Filter panel popup */
+              {/* Filter panel popup */}
               {showFilterPanel && (
                 <div className="filter-panel-overlay">
                   <FilterPanel
@@ -838,7 +838,7 @@ export default function Home() {
           )}
         </div>
 
-        /* Chat section */
+        {/* Chat section */}
         {status !== "idle" && (
           <div className="chat-section">
           <div className="chat-header">
@@ -896,7 +896,7 @@ export default function Home() {
         )}
       </div>
 
-      /* Toast */
+      {/* Toast */}
       {toast && (
         <div className={`toast ${toast.type}`}>
           {toast.message}
