@@ -13,8 +13,19 @@ const app = express();
 const server = http.createServer(app);
 const allowedOrigins = [
   "http://localhost:3000",
-  "https://comugle.vercel.app/"
+  "https://comugle.vercel.app"
 ];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, false); // reject cleanly, don't throw
+    }
+  },
+  credentials: true,
+};
 const corsOptions = {
   origin : function(origin, callback){
     if(!origin || allowedOrigins.includes(origin)){
