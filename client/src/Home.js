@@ -711,7 +711,7 @@ export default function Home() {
           ) : (
             <>
               <div className="video-area">
-                /* Remote video (stranger) — fullscreen */
+                {/* Remote video (stranger) — fullscreen */}
                 <div className="video-remote">
                   <video ref={remoteVideo} autoPlay playsInline />
                   {status === "connected" ? (
@@ -745,7 +745,7 @@ export default function Home() {
                   )}
                 </div>
 
-                /* Local video (you) — small PiP bottom-right */
+                {/* Local video (you) — small PiP bottom-right */}
                 <div className="video-pip">
                   <video ref={localVideo} autoPlay muted playsInline style={{ display: isVideoOn ? "block" : "none" }} />
                   {!isVideoOn && (
