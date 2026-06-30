@@ -21,21 +21,14 @@ const corsOptions = {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(null, false); // reject cleanly, don't throw
+      console.log("Blocked by CORS policy: Unauthorized origin. Don't try to be over smart");
+      callback(null, false);
     }
   },
   credentials: true,
 };
-const corsOptions = {
-  origin : function(origin, callback){
-    if(!origin || allowedOrigins.includes(origin)){
-      callback(null, true);
-    } else{
-      callback(new Error("Blocked by Cors policy: Unothorized origin.\nDon't try to be over smart"));
-    }
-  },
-  credentials: true
-};
+
+app.use(cors(corsOptions));
 app.use(cors(corsOptions));
 const io = new Server(server, {
   cors:{
